@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Kanit", sans-serif;
+  color: #59345D;
+  background: #FFFFFF;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-width: 320px;
+  min-height: 100%;
+  background: #FFFFFF;
+}
+
+html.perfume-route,
+html.perfume-route body,
+html.perfume-route #root {
+  min-width: 0;
+  background: #030304;
+  color: #F5F1F5;
+}
+
+body {
+  overflow-x: clip;
+}
+
+body.bottom-glow-preview {
+  --bottom-light: radial-gradient(
+    ellipse 100% 72% at 50% 112%,
+    rgba(185, 155, 218, 0.3) 0%,
+    rgba(245, 239, 249, 0.18) 38%,
+    transparent 82%
+  );
+}
+
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  background: transparent;
+}
+
+@media (pointer: coarse) {
+  .maze-mobile-pinball {
+    touch-action: pan-y pinch-zoom;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .maze-mobile-pinball img {
+    -webkit-user-drag: none;
+  }
+}
+
+.home-bottom-glow {
+  background-image: var(--bottom-light, none);
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 14rem;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hero-heading {
+  background: linear-gradient(180deg, #59345D 0%, #B99BDA 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-ambient {
+  background-color: #FFFFFF;
+  background-image:
+    radial-gradient(
+      ellipse at 50% 50%,
+      rgba(185, 155, 218, 0.2) 0%,
+      rgba(245, 239, 249, 0.32) 32%,
+      transparent 66%
+    );
+}
+
+#servicos {
+  background-image:
+    radial-gradient(
+      ellipse at 8% 18%,
+      rgba(185, 155, 218, 0.1),
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 94% 82%,
+      rgba(245, 239, 249, 0.82),
+      transparent 46%
+    );
+}
+
+#agendamento {
+  background-image:
+    radial-gradient(
+      ellipse at 50% 55%,
+      rgba(185, 155, 218, 0.12),
+      transparent 64%
+    );
+}
+

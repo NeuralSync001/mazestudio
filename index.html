@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#FEFEFE" />
+    <meta
+      name="description"
+      content="Conheça os serviços, roupas e perfumes do Espaço da Maze."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <title>Espaço da Maze — Serviços, Roupas e Perfumes</title>
+    <script>
+      if (window.location.pathname === "/perfumes") {
+        document.documentElement.classList.add("perfume-route");
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", "#030304");
+      }
+    </script>
+  </head>
+  <body class="bottom-glow-preview">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
