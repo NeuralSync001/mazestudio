@@ -23,7 +23,7 @@ Cadastre estas variáveis no ambiente de produção da Netlify:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
-- `ADMIN_ALLOWED_ORIGIN` — somente a origem do site, por exemplo `https://studiomaze.netlify.app`
+- `ADMIN_ALLOWED_ORIGIN` — somente a origem do site, por exemplo `https://seu-site.netlify.app`
 - `ADMIN_SESSION_SECRET` — segredo aleatório de 32 bytes, codificado em 64 caracteres hexadecimais; assina o prazo máximo das sessões administrativas
 
 Gere o segredo localmente com Node.js e cadastre a saída diretamente no gerenciador de variáveis da Netlify:
