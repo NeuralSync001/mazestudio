@@ -5,6 +5,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
+import { fetchPublicCatalog, type PublicCatalogProduct } from "../lib/publicCatalog";
 import "./MazeClothingPage.css";
 
 const MODELS =
@@ -41,6 +42,8 @@ const STOCK_CATEGORIES = [
   "Vestidos",
   "Casacos",
   "Saias",
+  "Acessórios",
+  "Outros",
 ] as const;
 type StockCategory = (typeof STOCK_CATEGORIES)[number];
 const STOCK_PRODUCTS = [
@@ -131,6 +134,15 @@ type MazeClothingPageProps = {
   onAddToCart: () => void;
 };
 
+function formatPrice(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    currency: "BRL",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency",
+  }).format(value);
+}
+
 export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
   const stageRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLElement>(null);
@@ -143,9 +155,14 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
   const targetRef = useRef(0);
   const dirtyRef = useRef(true);
   const wheelTimerRef = useRef<number | undefined>(undefined);
-  const [savedItems, setSavedItems] = useState<Set<number>>(() => new Set());
+  const [savedItems, setSavedItems] = useState<Set<string>>(() => new Set());
   const [stockCategory, setStockCategory] = useState<StockCategory>("Todas");
   const [stockSearch, setStockSearch] = useState("");
+  const [catalogProducts, setCatalogProducts] = useState<PublicCatalogProduct[]>([]);
+  const [catalogSource, setCatalogSource] = useState<
+    "loading" | "demo" | "live" | "error"
+  >("loading");
+  const [catalogError, setCatalogError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [showRing, setShowRing] = useState(false);
   const [assetsReady, setAssetsReady] = useState(false);
@@ -156,6 +173,14 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
     const matchesCategory =
       stockCategory === "Todas" || category === stockCategory;
     const matchesSearch = ITEMS[itemIndex][4]
+      .toLocaleLowerCase("pt-BR")
+      .includes(normalizedSearch);
+    return matchesCategory && matchesSearch;
+  });
+  const visibleCatalogProducts = catalogProducts.filter((product) => {
+    const matchesCategory =
+      stockCategory === "Todas" || product.clothingType === stockCategory;
+    const matchesSearch = `${product.name} ${product.brand ?? ""}`
       .toLocaleLowerCase("pt-BR")
       .includes(normalizedSearch);
     return matchesCategory && matchesSearch;
@@ -178,6 +203,32 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
       if (description && previousDescription !== undefined) {
         description.content = previousDescription;
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchPublicCatalog("roupas")
+      .then((result) => {
+        if (!active) return;
+        if (result.configured) {
+          setCatalogProducts(result.products);
+          setCatalogSource("live");
+        } else {
+          setCatalogSource("demo");
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Não foi possível carregar o estoque de roupas.", error);
+        if (active) {
+          setCatalogError(
+            "Não foi possível carregar o estoque. Atualize a página para tentar novamente.",
+          );
+          setCatalogSource("error");
+        }
+      });
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -442,8 +493,17 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
   const toggleSaved = (index: number) => {
     setSavedItems((previous) => {
       const next = new Set(previous);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+      if (next.has(String(index))) next.delete(String(index));
+      else next.add(String(index));
+      return next;
+    });
+  };
+
+  const toggleCatalogSaved = (id: string) => {
+    setSavedItems((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -542,7 +602,7 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
             >
               <button
                 aria-label={`Salvar ${item[4]}`}
-                aria-pressed={savedItems.has(index)}
+                aria-pressed={savedItems.has(String(index))}
                 className="mv-fav"
                 onClick={() => toggleSaved(index)}
                 type="button"
@@ -578,8 +638,9 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
               <p className="mv-stock-eyebrow">Espaço da Maze / Moda</p>
               <h2 id="mv-stock-title">Estoque de roupas</h2>
               <p>
-                Explore as peças da seleção e consulte tamanhos, valores e
-                disponibilidade com a equipe da Maze.
+                {catalogSource === "live"
+                  ? "Peças publicadas no painel, com preços e disponibilidade cadastrados. A sacola não finaliza pedidos."
+                  : "Explore as peças da seleção e consulte tamanhos, valores e disponibilidade com a equipe da Maze."}
               </p>
             </div>
           </div>
@@ -615,10 +676,97 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
           </div>
 
           <p aria-live="polite" className="sr-only">
-            {visibleStock.length} peças encontradas.
+            {catalogSource === "live"
+              ? visibleCatalogProducts.length
+              : visibleStock.length}{" "}
+            peças encontradas.
           </p>
+          {catalogSource === "demo" && (
+            <p className="mv-stock-notice" role="note">
+              Catálogo demonstrativo: peças, valores e disponibilidade são exemplos.
+            </p>
+          )}
+          {catalogSource === "error" && (
+            <p className="mv-stock-notice mv-stock-notice--error" role="alert">
+              {catalogError}
+            </p>
+          )}
           <div className="mv-stock-grid">
-            {visibleStock.length ? (
+            {catalogSource === "loading" ? (
+              <p className="mv-stock-empty" role="status">Carregando estoque...</p>
+            ) : catalogSource === "error" ? (
+              <p className="mv-stock-empty">{catalogError}</p>
+            ) : catalogSource === "live" ? (
+              visibleCatalogProducts.length ? (
+                visibleCatalogProducts.map((product) => {
+                  const availableStock = product.variants.reduce(
+                    (total, variant) => total + variant.stock,
+                    0,
+                  );
+                  const lowestPrice = Math.min(
+                    ...product.variants.map((variant) => variant.price),
+                  );
+                  return (
+                    <article className="mv-stock-card" key={product.id}>
+                      <div className="mv-stock-image">
+                        {product.images[0]?.url ? (
+                          <img
+                            alt={product.images[0].alt_text}
+                            className="mv-stock-photo"
+                            loading="lazy"
+                            src={product.images[0].url}
+                          />
+                        ) : (
+                          <span className="mv-stock-no-image">Foto não cadastrada</span>
+                        )}
+                        <button
+                          aria-label={`Salvar ${product.name}`}
+                          aria-pressed={savedItems.has(product.id)}
+                          className="mv-stock-fav"
+                          onClick={() => toggleCatalogSaved(product.id)}
+                          type="button"
+                        >
+                          <HeartIcon />
+                        </button>
+                      </div>
+                      <div className="mv-stock-info">
+                        <p className="mv-stock-category">{product.clothingType}</p>
+                        <h3>{product.name}</h3>
+                        {product.brand && (
+                          <p className="mv-stock-brand">{product.brand}</p>
+                        )}
+                        <p className="mv-stock-availability">
+                          {availableStock > 0
+                            ? `${availableStock} unidade${availableStock === 1 ? "" : "s"} ${availableStock === 1 ? "disponível" : "disponíveis"}`
+                            : "Indisponível no momento"}
+                        </p>
+                        <strong className="mv-stock-price">
+                          A partir de {formatPrice(lowestPrice)}
+                        </strong>
+                        <button
+                          aria-label={`Adicionar ${product.name} à sacola`}
+                          className="mv-stock-add"
+                          disabled={availableStock === 0}
+                          onClick={onAddToCart}
+                          type="button"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Adicionar à sacola
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="mv-stock-empty">
+                  {stockSearch || stockCategory !== "Todas"
+                    ? "Nenhuma peça encontrada. Tente outra busca ou categoria."
+                    : "Ainda não há roupas publicadas no estoque."}
+                </p>
+              )
+            ) : visibleStock.length ? (
               visibleStock.map(({ itemIndex, category }) => {
                 const item = ITEMS[itemIndex];
                 return (
@@ -627,7 +775,7 @@ export function MazeClothingPage({ onAddToCart }: MazeClothingPageProps) {
                       <ProductCrop item={item} />
                       <button
                         aria-label={`Salvar ${item[4]}`}
-                        aria-pressed={savedItems.has(itemIndex)}
+                        aria-pressed={savedItems.has(String(itemIndex))}
                         className="mv-stock-fav"
                         onClick={() => toggleSaved(itemIndex)}
                         type="button"

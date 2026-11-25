@@ -462,6 +462,32 @@
     #f5eff9;
 }
 
+.mv-stock-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mv-stock-no-image {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--mv-mid);
+  font-size: 0.75rem;
+}
+
+.mv-stock-notice {
+  margin: 0 0 16px;
+  color: var(--mv-mid);
+  font-size: 0.78rem;
+}
+
+.mv-stock-notice--error {
+  color: #a33b4b;
+}
+
 .mv-stock-fav {
   position: absolute;
   z-index: 1;
@@ -513,6 +539,19 @@
   margin-top: 8px;
   color: var(--mv-mid);
   font-size: 0.72rem;
+}
+
+.mv-stock-brand {
+  margin-top: 4px;
+  color: var(--mv-mid);
+  font-size: 0.72rem;
+}
+
+.mv-stock-price {
+  display: block;
+  margin-top: 8px;
+  color: var(--mv-ink);
+  font-size: 0.82rem;
 }
 
 .mv-stock-add {

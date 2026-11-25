@@ -15,14 +15,7 @@
       rel="stylesheet"
     />
     <title>Espaço da Maze — Serviços, Roupas e Perfumes</title>
-    <script>
-      if (window.location.pathname === "/perfumes") {
-        document.documentElement.classList.add("perfume-route");
-        document
-          .querySelector('meta[name="theme-color"]')
-          ?.setAttribute("content", "#030304");
-      }
-    </script>
+    <script src="/route-theme.js"></script>
   </head>
   <body class="bottom-glow-preview">
     <div id="root"></div>

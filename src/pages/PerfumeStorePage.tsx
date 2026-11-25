@@ -34,6 +34,10 @@ import type {
   PerfumeCategory,
   PerfumeProduct,
 } from "../data/perfumeCatalog";
+import {
+  fetchPublicCatalog,
+  type PublicCatalogProduct,
+} from "../lib/publicCatalog";
 import "./PerfumeStorePage.css";
 
 const PerfumeCanvas = lazy(() => import("../components/perfume/PerfumeCanvas"));
@@ -45,6 +49,46 @@ type CatalogFilter =
   | "Ofertas";
 type StorePanel = "cart" | "favorites" | null;
 type CartState = Record<string, number>;
+type PerfumeVariant = NonNullable<PerfumeProduct["variants"]>[number];
+
+const getCartKey = (product: PerfumeProduct, variant?: PerfumeVariant) =>
+  variant ? `${product.id}::${variant.id}` : product.id;
+
+function mapCatalogProduct(product: PublicCatalogProduct): PerfumeProduct {
+  const variants = product.variants.map((variant) => ({
+    id: variant.id,
+    label: variant.label,
+    price: variant.price,
+    previousPrice: variant.compare_at_price,
+    stock: variant.stock,
+  }));
+  const firstVariant = [...variants].sort((a, b) => a.price - b.price)[0];
+  if (!firstVariant) {
+    throw new Error(`O produto ${product.name} não possui variações publicadas.`);
+  }
+  if (!product.audience) {
+    throw new Error(`O produto ${product.name} não possui categoria definida.`);
+  }
+
+  return {
+    id: product.id,
+    name: product.name,
+    brand: product.brand ?? "",
+    category: product.audience,
+    price: firstVariant.price,
+    previousPrice: firstVariant.previousPrice ?? undefined,
+    family: product.family,
+    volumeMl: product.volumeMl,
+    description: product.description,
+    isNew: product.isNew,
+    isFeatured: product.isFeatured,
+    artwork: 0,
+    isDemo: false,
+    photoUrl: product.images[0]?.url ?? null,
+    photoAlt: product.images[0]?.alt_text,
+    variants,
+  };
+}
 
 const filters: CatalogFilter[] = [
   "Todos",
@@ -212,6 +256,26 @@ function DemoBottleArtwork({
         DEMO
       </text>
     </svg>
+  );
+}
+
+function ProductArtwork({
+  product,
+  className = "",
+}: {
+  product: PerfumeProduct;
+  className?: string;
+}) {
+  if (!product.photoUrl) {
+    return <DemoBottleArtwork className={className} index={product.artwork} />;
+  }
+  return (
+    <img
+      alt={product.photoAlt || `Foto de ${product.name}`}
+      className={`perfume-product-photo ${className}`}
+      loading="lazy"
+      src={product.photoUrl}
+    />
   );
 }
 
@@ -439,16 +503,19 @@ function ProductCard({
     >
       <div className="perfume-product-card__media">
         <button
-          aria-label={`Ver detalhes demonstrativos de ${product.name}`}
+          aria-label={`Ver detalhes de ${product.name}`}
           className="perfume-product-card__image-button"
           onClick={onOpen}
           type="button"
         >
-          <DemoBottleArtwork index={product.artwork} />
+          <ProductArtwork product={product} />
         </button>
         <div className="perfume-product-card__badges">
-          {discount && <span>OFERTA DEMO · {discount}%</span>}
-          {product.isNew && <span>NOVO · DEMO</span>}
+          {discount && <span>{product.isDemo ? "OFERTA DEMO" : "OFERTA"} · {discount}%</span>}
+          {product.isNew && <span>{product.isDemo ? "NOVO · DEMO" : "NOVO"}</span>}
+          {product.variants?.every((variant) => variant.stock === 0) && (
+            <span>ESGOTADO</span>
+          )}
         </div>
         <button
           aria-label={
@@ -466,12 +533,18 @@ function ProductCard({
         >
           <Heart fill={isFavorite ? "currentColor" : "none"} size={17} />
         </button>
-        <span className="perfume-product-card__art-note">IMAGEM DEMO</span>
+        <span className="perfume-product-card__art-note">
+          {product.isDemo
+            ? "IMAGEM DEMO"
+            : product.photoUrl
+              ? "FOTO DO PRODUTO"
+              : "FOTO NÃO CADASTRADA"}
+        </span>
       </div>
       <div className="perfume-product-card__info">
         <div className="perfume-product-card__eyebrow">
           <span>{product.category}</span>
-          <span>{product.brand}</span>
+          <span>{product.brand || "Marca não informada"}</span>
         </div>
         <button
           className="perfume-product-card__name"
@@ -482,14 +555,23 @@ function ProductCard({
           <ArrowUpRight aria-hidden="true" size={15} />
         </button>
         <div className="perfume-product-card__price">
-          <strong>{formatPrice(product.price)}</strong>
+          <strong>
+            {product.variants?.length ? "A partir de " : ""}
+            {formatPrice(product.price)}
+          </strong>
           {product.previousPrice && (
             <del>{formatPrice(product.previousPrice)}</del>
           )}
-          <span>VALORES DEMONSTRATIVOS</span>
+          <span>{product.isDemo ? "VALORES DEMONSTRATIVOS" : "PREÇO CADASTRADO"}</span>
         </div>
         <button
           className={`perfume-add-button ${added ? "is-added" : ""}`}
+          disabled={
+            Boolean(
+              product.variants?.length &&
+                product.variants.every((variant) => variant.stock === 0),
+            )
+          }
           onClick={(event) => {
             event.stopPropagation();
             onAdd();
@@ -497,18 +579,29 @@ function ProductCard({
           type="button"
         >
           {added ? <Check size={16} /> : <ShoppingBag size={16} />}
-          {added ? "Adicionado" : "Adicionar à sacola"}
+          {added ? "Adicionado" : product.variants && product.variants.length > 1
+            ? "Escolher variação"
+            : "Adicionar à sacola"}
         </button>
       </div>
     </motion.article>
   );
 }
 
+type CartLine = {
+  key: string;
+  product: PerfumeProduct;
+  variant?: PerfumeVariant;
+  quantity: number;
+  price: number;
+};
+
 function CartPanel({
   cart,
   checkoutStarted,
   favoriteProducts,
   mode,
+  products,
   onAdd,
   onCheckout,
   onClose,
@@ -521,7 +614,8 @@ function CartPanel({
   checkoutStarted: boolean;
   favoriteProducts: PerfumeProduct[];
   mode: Exclude<StorePanel, null>;
-  onAdd: (product: PerfumeProduct, amount?: number) => void;
+  products: PerfumeProduct[];
+  onAdd: (product: PerfumeProduct, amount?: number, variant?: PerfumeVariant) => void;
   onCheckout: () => void;
   onClose: () => void;
   onOpenProduct: (product: PerfumeProduct) => void;
@@ -529,9 +623,23 @@ function CartPanel({
   onSetMode: (mode: Exclude<StorePanel, null>) => void;
   onUpdateQuantity: (id: string, delta: number) => void;
 }) {
-  const cartItems = perfumeCatalog.filter((product) => cart[product.id]);
+  const cartItems: CartLine[] = products.flatMap((product) => {
+    if (product.variants?.length) {
+      return product.variants.flatMap((variant) => {
+        const key = getCartKey(product, variant);
+        const quantity = cart[key] ?? 0;
+        return quantity > 0
+          ? [{ key, product, variant, quantity, price: variant.price }]
+          : [];
+      });
+    }
+    const quantity = cart[product.id] ?? 0;
+    return quantity > 0
+      ? [{ key: product.id, product, quantity, price: product.price }]
+      : [];
+  });
   const subtotal = cartItems.reduce(
-    (total, product) => total + product.price * cart[product.id],
+    (total, item) => total + item.price * item.quantity,
     0,
   );
   const isCart = mode === "cart";
@@ -606,10 +714,10 @@ function CartPanel({
                     onClick={() => onOpenProduct(product)}
                     type="button"
                   >
-                    <DemoBottleArtwork index={product.artwork} />
+                    <ProductArtwork product={product} />
                   </button>
                   <div className="perfume-drawer-item__copy">
-                    <span>{product.brand}</span>
+                    <span>{product.brand || "Marca não informada"}</span>
                     <button
                       className="perfume-drawer-item__name"
                       onClick={() => onOpenProduct(product)}
@@ -618,13 +726,15 @@ function CartPanel({
                       {product.name}
                     </button>
                     <strong>{formatPrice(product.price)}</strong>
-                    <button
-                      className="perfume-text-link"
-                      onClick={() => onAdd(product)}
-                      type="button"
-                    >
-                      Adicionar à sacola <ArrowRight size={13} />
-                    </button>
+                    {!product.variants?.every((variant) => variant.stock === 0) && (
+                      <button
+                        className="perfume-text-link"
+                        onClick={() => onAdd(product)}
+                        type="button"
+                      >
+                        Adicionar à sacola <ArrowRight size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -645,17 +755,17 @@ function CartPanel({
                   </button>
                 </div>
               ) : (
-                cartItems.map((product) => (
-                  <div className="perfume-drawer-item" key={product.id}>
+                cartItems.map(({ key, product, variant, quantity, price }) => (
+                    <div className="perfume-drawer-item" key={key}>
                     <button
                       className="perfume-drawer-item__art"
                       onClick={() => onOpenProduct(product)}
                       type="button"
                     >
-                      <DemoBottleArtwork index={product.artwork} />
+                      <ProductArtwork product={product} />
                     </button>
                     <div className="perfume-drawer-item__copy">
-                      <span>{product.brand}</span>
+                      <span>{product.brand || "Marca não informada"}</span>
                       <button
                         className="perfume-drawer-item__name"
                         onClick={() => onOpenProduct(product)}
@@ -663,19 +773,21 @@ function CartPanel({
                       >
                         {product.name}
                       </button>
-                      <strong>{formatPrice(product.price)}</strong>
+                      {variant && <span>{variant.label}</span>}
+                      <strong>{formatPrice(price)}</strong>
                       <div className="perfume-quantity-control">
                         <button
                           aria-label={`Diminuir quantidade de ${product.name}`}
-                          onClick={() => onUpdateQuantity(product.id, -1)}
+                          onClick={() => onUpdateQuantity(key, -1)}
                           type="button"
                         >
                           <Minus size={13} />
                         </button>
-                        <span>{cart[product.id]}</span>
+                        <span>{quantity}</span>
                         <button
                           aria-label={`Aumentar quantidade de ${product.name}`}
-                          onClick={() => onUpdateQuantity(product.id, 1)}
+                          disabled={variant ? quantity >= variant.stock : false}
+                          onClick={() => onUpdateQuantity(key, 1)}
                           type="button"
                         >
                           <Plus size={13} />
@@ -685,7 +797,7 @@ function CartPanel({
                     <button
                       aria-label={`Remover ${product.name} da sacola`}
                       className="perfume-remove-button"
-                      onClick={() => onRemove(product.id)}
+                      onClick={() => onRemove(key)}
                       type="button"
                     >
                       <Trash2 size={16} />
@@ -712,7 +824,7 @@ function CartPanel({
                 ) : (
                   <>
                     <div className="perfume-cart-summary__line">
-                      <span>Subtotal demonstrativo</span>
+                      <span>Subtotal</span>
                       <strong>{formatPrice(subtotal)}</strong>
                     </div>
                     <div className="perfume-cart-summary__line">
@@ -720,11 +832,11 @@ function CartPanel({
                       <span>A definir</span>
                     </div>
                     <div className="perfume-cart-summary__line is-total">
-                      <span>Total demonstrativo</span>
+                      <span>Total estimado</span>
                       <strong>{formatPrice(subtotal)}</strong>
                     </div>
                     <p className="perfume-cart-disclaimer">
-                      Preços de demonstração. Nenhum pagamento será cobrado.
+                      Valores sem frete. O checkout e o pagamento ainda não estão integrados.
                     </p>
                     <button
                       className="perfume-primary-button perfume-checkout-button"
@@ -750,18 +862,37 @@ function ProductDetail({
   onClose,
   onOpenRelated,
   product,
+  products,
   reducedMotion,
 }: {
-  onAdd: (product: PerfumeProduct, amount: number) => void;
+  onAdd: (product: PerfumeProduct, amount: number, variant?: PerfumeVariant) => void;
   onClose: () => void;
   onOpenRelated: (product: PerfumeProduct) => void;
   product: PerfumeProduct;
+  products: PerfumeProduct[];
   reducedMotion: boolean;
 }) {
   const [quantity, setQuantity] = useState(1);
-  const related = perfumeCatalog.filter((item) => item.id !== product.id).slice(0, 3);
+  const [selectedVariantId, setSelectedVariantId] = useState(
+    product.variants?.[0]?.id ?? "",
+  );
+  const related = products.filter((item) => item.id !== product.id).slice(0, 3);
+  const selectedVariant = product.variants?.find(
+    (variant) => variant.id === selectedVariantId,
+  );
+  const displayPrice = selectedVariant?.price ?? product.price;
+  const previousPrice =
+    selectedVariant?.previousPrice ?? product.previousPrice ?? null;
 
-  useEffect(() => setQuantity(1), [product.id]);
+  useEffect(() => {
+    setQuantity(1);
+    setSelectedVariantId(product.variants?.[0]?.id ?? "");
+  }, [product]);
+  useEffect(() => {
+    if (selectedVariant && quantity > selectedVariant.stock) {
+      setQuantity(Math.max(1, selectedVariant.stock));
+    }
+  }, [quantity, selectedVariant]);
 
   return (
     <motion.div
@@ -792,38 +923,76 @@ function ProductDetail({
         </button>
         <div className="perfume-detail-grid">
           <div className="perfume-detail-art">
-            <span>ILUSTRAÇÃO DE DEMONSTRAÇÃO</span>
-            <DemoBottleArtwork className="perfume-detail-art__bottle" index={product.artwork} />
+            <span>
+              {product.isDemo
+                ? "ILUSTRAÇÃO DE DEMONSTRAÇÃO"
+                : product.photoUrl
+                  ? "FOTO DO PRODUTO"
+                  : "FOTO NÃO CADASTRADA"}
+            </span>
+            <ProductArtwork
+              className="perfume-detail-art__bottle"
+              product={product}
+            />
           </div>
           <div className="perfume-detail-copy">
-            <p className="perfume-kicker">{product.brand}</p>
+            <p className="perfume-kicker">{product.brand || "Marca não informada"}</p>
             <p className="perfume-detail-category">
-              {product.category} · CATÁLOGO DEMONSTRATIVO
+              {product.category}
+              {product.isDemo ? " · CATÁLOGO DEMONSTRATIVO" : ""}
             </p>
             <h2 id="perfume-detail-title">{product.name}</h2>
             <p className="perfume-detail-price">
-              {formatPrice(product.price)}
-              {product.previousPrice && (
-                <del>{formatPrice(product.previousPrice)}</del>
-              )}
+              {formatPrice(displayPrice)}
+              {previousPrice !== null && <del>{formatPrice(previousPrice)}</del>}
             </p>
             <span className="perfume-demo-price-label">
-              VALOR FICTÍCIO PARA DEMONSTRAÇÃO
+              {product.isDemo ? "VALOR FICTÍCIO PARA DEMONSTRAÇÃO" : "PREÇO CADASTRADO"}
             </span>
-            <p className="perfume-detail-description">{product.description}</p>
+            {product.variants && product.variants.length > 1 && (
+              <label className="perfume-variant-select">
+                <span>Tamanho ou volume</span>
+                <select
+                  onChange={(event) => setSelectedVariantId(event.target.value)}
+                  value={selectedVariantId}
+                >
+                  {product.variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <p className="perfume-detail-description">
+              {product.description || "Descrição não cadastrada."}
+            </p>
             <dl className="perfume-detail-data">
               <div>
                 <dt>Família olfativa</dt>
-                <dd>{product.family ?? "A cadastrar"}</dd>
+                <dd>{product.family ?? "Não informada"}</dd>
               </div>
               <div>
                 <dt>Volume</dt>
-                <dd>{product.volumeMl ? `${product.volumeMl} ml` : "A cadastrar"}</dd>
+                <dd>
+                  {selectedVariant?.label ??
+                    (product.volumeMl ? `${product.volumeMl} ml` : "Não informado")}
+                </dd>
               </div>
               <div>
                 <dt>Entrega</dt>
                 <dd>Informações a cadastrar</dd>
               </div>
+              {selectedVariant && (
+                <div>
+                  <dt>Disponibilidade</dt>
+                  <dd>
+                    {selectedVariant.stock > 0
+                      ? `${selectedVariant.stock} unidade${selectedVariant.stock === 1 ? "" : "s"}`
+                      : "Indisponível"}
+                  </dd>
+                </div>
+              )}
             </dl>
             <div className="perfume-detail-buy-row">
               <div className="perfume-quantity-control">
@@ -838,6 +1007,11 @@ function ProductDetail({
                 <span>{quantity}</span>
                 <button
                   aria-label="Aumentar quantidade"
+                  disabled={
+                    selectedVariant
+                      ? quantity >= selectedVariant.stock
+                      : false
+                  }
                   onClick={() => setQuantity((value) => value + 1)}
                   type="button"
                 >
@@ -846,7 +1020,8 @@ function ProductDetail({
               </div>
               <button
                 className="perfume-primary-button"
-                onClick={() => onAdd(product, quantity)}
+                disabled={selectedVariant?.stock === 0}
+                onClick={() => onAdd(product, quantity, selectedVariant)}
                 type="button"
               >
                 <ShoppingBag size={16} />
@@ -854,8 +1029,9 @@ function ProductDetail({
               </button>
             </div>
             <p className="perfume-detail-note">
-              Item demonstrativo. Cadastro, disponibilidade e pagamento reais
-              ainda não foram conectados.
+              {product.isDemo
+                ? "Item demonstrativo. Cadastro, disponibilidade e pagamento reais ainda não foram conectados."
+                : "A sacola é demonstrativa; disponibilidade, checkout e pagamento ainda precisam ser confirmados."}
             </p>
           </div>
         </div>
@@ -894,6 +1070,21 @@ export function PerfumeStorePage() {
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const [addedProductId, setAddedProductId] = useState<string | null>(null);
   const [loadModel, setLoadModel] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState<PerfumeProduct[] | null>(
+    null,
+  );
+  const [catalogSource, setCatalogSource] = useState<
+    "loading" | "demo" | "live" | "error"
+  >("loading");
+  const [catalogError, setCatalogError] = useState("");
+
+  const products = useMemo(
+    () =>
+      catalogSource === "demo"
+        ? perfumeCatalog
+        : catalogProducts ?? [],
+    [catalogSource, catalogProducts],
+  );
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -901,12 +1092,38 @@ export function PerfumeStorePage() {
       'meta[name="theme-color"]',
     );
 
-    document.title = "Mazé Parfums — Fragrâncias de demonstração";
+    document.title = "Mazé Parfums — Fragrâncias";
     themeColor?.setAttribute("content", "#030304");
 
     return () => {
       document.title = previousTitle;
       themeColor?.setAttribute("content", "#FEFEFE");
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchPublicCatalog("perfumes")
+      .then((result) => {
+        if (!active) return;
+        if (result.configured) {
+          setCatalogProducts(result.products.map(mapCatalogProduct));
+          setCatalogSource("live");
+        } else {
+          setCatalogSource("demo");
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("Não foi possível carregar o catálogo de perfumes.", error);
+        if (active) {
+          setCatalogError(
+            "Não foi possível carregar os perfumes. Atualize a página para tentar novamente.",
+          );
+          setCatalogSource("error");
+        }
+      });
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -968,14 +1185,23 @@ export function PerfumeStorePage() {
   );
 
   const cartCount = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0);
-  const favoriteProducts = perfumeCatalog.filter((product) =>
+  const favoriteProducts = products.filter((product) =>
     favorites.includes(product.id),
+  );
+  const brandNames = useMemo(
+    () =>
+      catalogSource === "demo"
+        ? demoBrands
+        : Array.from(
+            new Set(products.map((product) => product.brand).filter(Boolean)),
+          ),
+    [catalogSource, products],
   );
 
   const visibleProducts = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase("pt-BR");
 
-    return perfumeCatalog.filter((product) => {
+    return products.filter((product) => {
       const matchesFilter =
         filter === "Todos" ||
         (filter === "Ofertas" && Boolean(product.previousPrice)) ||
@@ -989,7 +1215,7 @@ export function PerfumeStorePage() {
 
       return matchesFilter && matchesQuery;
     });
-  }, [filter, searchQuery]);
+  }, [filter, products, searchQuery]);
 
   const scrollTo = (id: string) => {
     const target = document.getElementById(id);
@@ -1005,10 +1231,26 @@ export function PerfumeStorePage() {
     scrollTo("colecao");
   };
 
-  const addToCart = (product: PerfumeProduct, amount = 1) => {
+  const addToCart = (
+    product: PerfumeProduct,
+    amount = 1,
+    variant?: PerfumeVariant,
+  ) => {
+    const selectedVariant =
+      variant ??
+      product.variants?.find((item) => item.stock > 0) ??
+      product.variants?.[0];
+    const cartKey = getCartKey(product, selectedVariant);
+    if (
+      selectedVariant &&
+      (selectedVariant.stock === 0 ||
+        (cart[cartKey] ?? 0) + amount > selectedVariant.stock)
+    ) {
+      return;
+    }
     setCart((current) => ({
       ...current,
-      [product.id]: (current[product.id] ?? 0) + amount,
+      [cartKey]: (current[cartKey] ?? 0) + amount,
     }));
     setCheckoutStarted(false);
     setAddedProductId(product.id);
@@ -1064,10 +1306,22 @@ export function PerfumeStorePage() {
 
   return (
     <div className="perfume-store">
-      <div className="perfume-demo-notice" role="note">
-        <Sparkles aria-hidden="true" size={13} />
-        <span>{demoCatalogNotice}</span>
-      </div>
+      {catalogSource === "demo" ? (
+        <div className="perfume-demo-notice" role="note">
+          <Sparkles aria-hidden="true" size={13} />
+          <span>{demoCatalogNotice}</span>
+        </div>
+      ) : catalogSource === "loading" ? (
+        <div className="perfume-demo-notice" role="status">
+          <Sparkles aria-hidden="true" size={13} />
+          <span>Carregando o catálogo...</span>
+        </div>
+      ) : catalogSource === "error" ? (
+        <div className="perfume-demo-notice" role="alert">
+          <Sparkles aria-hidden="true" size={13} />
+          <span>{catalogError}</span>
+        </div>
+      ) : null}
 
       <PerfumeHeader
         activeFilter={filter}
@@ -1201,12 +1455,28 @@ export function PerfumeStorePage() {
           </span>
         </section>
 
-        <section aria-label="Aviso sobre a demonstração" className="perfume-status-strip">
-          <span>CATÁLOGO DE DEMONSTRAÇÃO</span>
+        <section aria-label="Status do catálogo" className="perfume-status-strip">
+          <span>
+            {catalogSource === "live"
+              ? "CATÁLOGO CONECTADO"
+              : catalogSource === "demo"
+                ? "CATÁLOGO DE DEMONSTRAÇÃO"
+                : catalogSource === "loading"
+                  ? "CARREGANDO CATÁLOGO"
+                  : "CATÁLOGO INDISPONÍVEL"}
+          </span>
           <span>·</span>
           <span>SEM PAGAMENTO REAL</span>
           <span>·</span>
-          <span>DADOS A SUBSTITUIR</span>
+          <span>
+            {catalogSource === "live"
+              ? "DISPONIBILIDADE A CONFIRMAR"
+              : catalogSource === "demo"
+                ? "DADOS A SUBSTITUIR"
+                : catalogSource === "loading"
+                  ? "AGUARDE"
+                  : "TENTE NOVAMENTE MAIS TARDE"}
+          </span>
         </section>
 
         <motion.section
@@ -1227,8 +1497,9 @@ export function PerfumeStorePage() {
               </h2>
             </div>
             <p className="perfume-section-intro">
-              Uma curadoria visual demonstrativa. Os produtos reais, suas
-              imagens e informações serão cadastrados depois.
+              {catalogSource === "live"
+                ? "Fragrâncias publicadas no painel, com informações e valores cadastrados."
+                : "Uma curadoria visual demonstrativa. Os produtos reais, suas imagens e informações serão cadastrados depois."}
             </p>
           </div>
 
@@ -1247,11 +1518,22 @@ export function PerfumeStorePage() {
               ))}
             </div>
             <span className="perfume-results-count">
-              {visibleProducts.length.toString().padStart(2, "0")} ITENS DEMO
+              {visibleProducts.length.toString().padStart(2, "0")}{" "}
+              {catalogSource === "live" ? "ITENS" : "ITENS DEMO"}
             </span>
           </div>
 
-          {visibleProducts.length > 0 ? (
+          {catalogSource === "loading" ? (
+            <div className="perfume-no-results" role="status">
+              <Sparkles size={22} />
+              <p>Carregando perfumes...</p>
+            </div>
+          ) : catalogSource === "error" ? (
+            <div className="perfume-no-results" role="alert">
+              <Search size={22} />
+              <p>{catalogError}</p>
+            </div>
+          ) : visibleProducts.length > 0 ? (
             <div className="perfume-product-grid">
               {visibleProducts.map((product, index) => (
                 <ProductCard
@@ -1259,7 +1541,13 @@ export function PerfumeStorePage() {
                   index={index}
                   isFavorite={favorites.includes(product.id)}
                   key={product.id}
-                  onAdd={() => addToCart(product)}
+                  onAdd={() => {
+                    if (product.variants && product.variants.length > 1) {
+                      setActiveProduct(product);
+                    } else {
+                      addToCart(product, 1, product.variants?.[0]);
+                    }
+                  }}
                   onFavorite={() => toggleFavorite(product.id)}
                   onOpen={() => setActiveProduct(product)}
                   product={product}
@@ -1270,7 +1558,13 @@ export function PerfumeStorePage() {
           ) : (
             <div className="perfume-no-results">
               <Search size={22} />
-              <p>Nenhuma fragrância encontrada.</p>
+              <p>
+                {catalogSource === "live" &&
+                searchQuery.length === 0 &&
+                filter === "Todos"
+                  ? "Ainda não há perfumes publicados no catálogo."
+                  : "Nenhuma fragrância encontrada."}
+              </p>
               <button
                 onClick={() => {
                   setSearchQuery("");
@@ -1284,6 +1578,7 @@ export function PerfumeStorePage() {
           )}
         </motion.section>
 
+        {catalogSource !== "live" && (
         <section aria-labelledby="perfume-offer-title" className="perfume-offer-section" id="ofertas">
           <div aria-hidden="true" className="perfume-offer-section__glow" />
           <div className="perfume-offer-copy">
@@ -1313,6 +1608,7 @@ export function PerfumeStorePage() {
             MAZÉ / 03
           </span>
         </section>
+        )}
 
         <section
           aria-labelledby="perfume-brands-title"
@@ -1325,16 +1621,24 @@ export function PerfumeStorePage() {
               Marcas em
               <em> destaque.</em>
             </h2>
-            <p>Espaço reservado para as marcas confirmadas no catálogo.</p>
+            <p>
+              {catalogSource === "live"
+                ? "Marcas dos perfumes publicados no catálogo."
+                : "Espaço reservado para as marcas confirmadas no catálogo."}
+            </p>
           </div>
           <div className="perfume-brand-list">
-            {demoBrands.map((brand, index) => (
+            {brandNames.length ? brandNames.map((brand, index) => (
               <div className="perfume-brand-tile" key={brand}>
                 <span>0{index + 1}</span>
                 <p>{brand}</p>
-                <small>DEMONSTRAÇÃO</small>
+                <small>{catalogSource === "live" ? "NO CATÁLOGO" : "DEMONSTRAÇÃO"}</small>
               </div>
-            ))}
+            )) : (
+              <p className="perfume-brand-empty">
+                As marcas dos produtos publicados aparecerão aqui.
+              </p>
+            )}
           </div>
         </section>
       </main>
@@ -1369,7 +1673,11 @@ export function PerfumeStorePage() {
         </div>
         <div className="perfume-footer__bottom">
           <span>© {new Date().getFullYear()} ESPAÇO DA MAZÉ</span>
-          <span>CATÁLOGO VISUAL DEMONSTRATIVO · NENHUMA VENDA REAL</span>
+          <span>
+            {catalogSource === "live"
+              ? "CATÁLOGO ATUALIZADO PELO PAINEL · PAGAMENTO NÃO INTEGRADO"
+              : "CATÁLOGO VISUAL DEMONSTRATIVO · NENHUMA VENDA REAL"}
+          </span>
           <Link to="/">VOLTAR AO ESPAÇO <ArrowUpRight size={13} /></Link>
         </div>
       </footer>
@@ -1382,6 +1690,7 @@ export function PerfumeStorePage() {
             favoriteProducts={favoriteProducts}
             key={panel}
             mode={panel}
+            products={products}
             onAdd={addToCart}
             onCheckout={() => setCheckoutStarted((started) => !started)}
             onClose={() => setPanel(null)}
@@ -1401,6 +1710,7 @@ export function PerfumeStorePage() {
             onClose={() => setActiveProduct(null)}
             onOpenRelated={setActiveProduct}
             product={activeProduct}
+            products={products}
             reducedMotion={reducedMotion}
           />
         )}

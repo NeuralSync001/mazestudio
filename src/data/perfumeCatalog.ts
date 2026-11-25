@@ -13,6 +13,16 @@ export type PerfumeProduct = {
   isNew: boolean;
   isFeatured: boolean;
   artwork: number;
+  isDemo: boolean;
+  photoUrl?: string | null;
+  photoAlt?: string;
+  variants?: Array<{
+    id: string;
+    label: string;
+    price: number;
+    previousPrice: number | null;
+    stock: number;
+  }>;
 };
 
 const demoDescription =
@@ -32,6 +42,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: false,
     isFeatured: true,
     artwork: 0,
+    isDemo: true,
   },
   {
     id: "velvet-02",
@@ -45,6 +56,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: true,
     isFeatured: true,
     artwork: 1,
+    isDemo: true,
   },
   {
     id: "after-03",
@@ -59,6 +71,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: false,
     isFeatured: true,
     artwork: 2,
+    isDemo: true,
   },
   {
     id: "rose-04",
@@ -72,6 +85,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: true,
     isFeatured: false,
     artwork: 3,
+    isDemo: true,
   },
   {
     id: "ombre-05",
@@ -85,6 +99,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: false,
     isFeatured: false,
     artwork: 4,
+    isDemo: true,
   },
   {
     id: "silk-06",
@@ -99,6 +114,7 @@ export const perfumeCatalog: PerfumeProduct[] = [
     isNew: true,
     isFeatured: false,
     artwork: 5,
+    isDemo: true,
   },
 ];
 

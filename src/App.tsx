@@ -10,6 +10,7 @@ import { SiteHeader } from "./components/SiteHeader";
 import { HomePage } from "./pages/HomePage";
 import { MazeClothingPage } from "./pages/MazeClothingPage";
 import { PerfumeStorePage } from "./pages/PerfumeStorePage";
+import { AdminPage } from "./pages/AdminPage";
 
 function ScrollToAnchor() {
   const { pathname, hash } = useLocation();
@@ -48,7 +49,7 @@ function NotFoundPage() {
   );
 }
 
-function SiteFooter() {
+function SiteFooter({ showAdminLink = false }: { showAdminLink?: boolean }) {
   return (
     <footer className="border-t border-plum/10 px-5 py-5 sm:px-8">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-[0.6rem] text-plum/70 sm:flex-row">
@@ -62,6 +63,15 @@ function SiteFooter() {
           <Link className="hover:text-plum" to="/perfumes">
             Perfumes
           </Link>
+          {showAdminLink && (
+            <Link
+              aria-label="Acessar painel administrativo"
+              className="text-[0.6rem] hover:text-plum"
+              to="/admin"
+            >
+              Área administrativa
+            </Link>
+          )}
         </nav>
         <span>© {new Date().getFullYear()} Espaço da Maze</span>
       </div>
@@ -82,6 +92,7 @@ function AppLayout() {
   const { pathname } = useLocation();
   const isClothing = pathname === "/roupas";
   const isPerfumeStore = pathname === "/perfumes";
+  const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const [cartCount, setCartCount] = useState(0);
 
   useLayoutEffect(() => {
@@ -96,7 +107,9 @@ function AppLayout() {
   return (
     <div
       className={
-        isPerfumeStore
+        isAdmin
+          ? "admin-route-root min-h-svh bg-[#f7f6f8] text-[#29232c]"
+          : isPerfumeStore
           ? "min-h-screen overflow-x-clip bg-[#030304] text-[#F5F1F5]"
           : isClothing
             ? "min-h-svh overflow-x-clip bg-transparent text-plum"
@@ -105,7 +118,7 @@ function AppLayout() {
               }`
       }
     >
-      {!isPerfumeStore && (
+      {!isPerfumeStore && !isAdmin && (
         <SiteHeader cartCount={isClothing ? cartCount : undefined} />
       )}
       <Routes>
@@ -119,9 +132,12 @@ function AppLayout() {
           }
         />
         <Route path="/perfumes" element={<PerfumeStorePage />} />
+        <Route path="/admin/*" element={<AdminPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      {!isClothing && !isPerfumeStore && <SiteFooter />}
+      {!isClothing && !isPerfumeStore && !isAdmin && (
+        <SiteFooter showAdminLink={pathname === "/"} />
+      )}
     </div>
   );
 }
