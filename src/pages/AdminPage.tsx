@@ -298,6 +298,9 @@ function AdminSignIn({
               {busy ? "Verificando…" : "Entrar com segurança"}
             </button>
           </form>
+          <Link className="admin-auth-recovery-link" to="/admin/redefinir-senha">
+            Esqueci minha senha
+          </Link>
           <p className="admin-auth-security">
             <ShieldCheck size={14} /> A entrada exige uma conta autorizada e confirmação em duas etapas.
           </p>

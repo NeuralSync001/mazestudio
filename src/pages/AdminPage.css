@@ -240,6 +240,20 @@
   color: #59345d;
 }
 
+.admin-auth-recovery-link {
+  display: block;
+  width: fit-content;
+  margin: 14px auto 0;
+  color: #59345d;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-auth-recovery-link:hover {
+  color: #422747;
+}
+
 .admin-back-link {
   display: flex;
   width: fit-content;
@@ -260,6 +274,16 @@
   border: 0;
   background: none;
   cursor: pointer;
+}
+
+.admin-recovery-loader {
+  display: block;
+  margin: 24px auto 0;
+  color: #59345d;
+}
+
+.admin-recovery-action {
+  margin-top: 24px;
 }
 
 .admin-alert {

@@ -11,6 +11,7 @@ import { HomePage } from "./pages/HomePage";
 import { MazeClothingPage } from "./pages/MazeClothingPage";
 import { PerfumeStorePage } from "./pages/PerfumeStorePage";
 import { AdminPage } from "./pages/AdminPage";
+import { AdminPasswordRecoveryPage } from "./pages/AdminPasswordRecoveryPage";
 
 function ScrollToAnchor() {
   const { pathname, hash } = useLocation();
@@ -132,6 +133,10 @@ function AppLayout() {
           }
         />
         <Route path="/perfumes" element={<PerfumeStorePage />} />
+        <Route
+          path="/admin/redefinir-senha"
+          element={<AdminPasswordRecoveryPage />}
+        />
         <Route path="/admin/*" element={<AdminPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

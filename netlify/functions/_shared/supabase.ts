@@ -12,6 +12,7 @@ import {
 type ServiceConfig = {
   url: string;
   anonKey: string;
+  allowedOrigin: string;
 };
 
 export function getServiceConfig(): ServiceConfig | null {
@@ -37,7 +38,7 @@ export function getServiceConfig(): ServiceConfig | null {
     return null;
   }
 
-  return { url, anonKey };
+  return { url, anonKey, allowedOrigin };
 }
 
 export function createSupabaseClient(config = getServiceConfig()) {

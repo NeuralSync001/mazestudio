@@ -111,6 +111,15 @@ export async function postAdminAuth(
   });
 }
 
+export async function postAdminPasswordRecovery(
+  body: Record<string, string>,
+): Promise<{ sent?: boolean; updated?: boolean; warning?: string }> {
+  return request("/.netlify/functions/admin-password-recovery", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export async function getAdminProducts(): Promise<{
   products: AdminProduct[];
   activity: AdminActivity[];
