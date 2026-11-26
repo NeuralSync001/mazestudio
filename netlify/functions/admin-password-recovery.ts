@@ -15,7 +15,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RECOVERY_PATH = "/admin/redefinir-senha";
 
 function isBoundedToken(value: unknown): value is string {
-  return typeof value === "string" && value.length >= 20 && value.length <= 4096;
+  return typeof value === "string" && value.length > 0 && value.length <= 4096;
 }
 
 export const handler: Handler = async (event) => {
@@ -74,12 +74,15 @@ export const handler: Handler = async (event) => {
     const password = typeof body.password === "string" ? body.password : "";
     if (
       !isBoundedToken(accessToken) ||
-      !isBoundedToken(refreshToken) ||
-      password.length < 12 ||
-      password.length > 128
+      !isBoundedToken(refreshToken)
     ) {
       return json(400, {
-        error: "O link ou a senha não são válidos. Solicite um novo link e tente novamente.",
+        error: "O link de recuperação não contém uma sessão válida. Solicite um novo link.",
+      });
+    }
+    if (password.length < 12 || password.length > 128) {
+      return json(400, {
+        error: "A senha precisa ter entre 12 e 128 caracteres.",
       });
     }
 
